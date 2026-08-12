@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Swarm Controller Dashboard</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@8.2.0/dist/ol.css">
+    <script src="https://cdn.jsdelivr.net/npm/ol@8.2.0/dist/ol.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1e1e1e;
+            color: #e0e0e0;
+        }
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+        #map {
+            flex: 1;
+            min-height: 100vh;
+        }
+        .sidebar {
+            width: 300px;
+            background: #2d2d2d;
+            border-left: 1px solid #444;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .sidebar-header {
+            padding: 16px;
+            border-bottom: 1px solid #444;
+            background: #3a3a3a;
+        }
+        .sidebar-header h2 {
+            font-size: 18px;
+            margin-bottom: 8px;
+            color: #4db8ff;
+        }
+        .sidebar-stats {
+            font-size: 12px;
+            color: #999;
+            display: flex;
+            gap: 16px;
+        }
+        .stat {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #4db8ff;
+        }
+        .stat-label {
+            font-size: 10px;
+            color: #666;
+        }
+        .drone-list {
+            flex: 1;
+            min-height: 0;
+            padding: 8px;
+            overflow-y: auto;
+        }
+        .drone-item {
+            background: #3a3a3a;
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .drone-item:hover {
+            background: #454545;
+            border-color: #666;
+        }
+        .drone-item.online {
+            border-left: 4px solid #4db8ff;
+        }
+        .drone-item.offline {
+            border-left: 4px solid #ff6b6b;
+            opacity: 0.6;
+        }
+        .drone-name {
+            font-weight: bold;
+            font-size: 14px;
+            color: #4db8ff;
+            margin-bottom: 4px;
+        }
+        .drone-status {
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 4px;
+        }
+        .drone-status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+        .drone-status-badge.online {
+            background: #2a5f3a;
+            color: #4db8ff;
+        }
+        .drone-status-badge.offline {
+            background: #5f2a2a;
+            color: #ff6b6b;
+        }
+        .drone-coords {
+            font-size: 11px;
+            color: #666;
+            margin-top: 4px;
+            line-height: 1.4;
+        }
+        .drone-heading {
+            font-size: 11px;
+            color: #666;
+            margin-top: 4px;
+        }
+        .connection-status {
+            padding: 8px;
+            text-align: center;
+            font-size: 11px;
+            border-top: 1px solid #444;
+            background: #3a3a3a;
+        }
+        .connection-status.connected {
+            color: #4db8ff;
+        }
+        .connection-status.disconnected {
+            color: #ff6b6b;
+        }
+        .ol-popup {
+            position: absolute;
+            background-color: #2d2d2d;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+            padding: 12px;
+            border: 1px solid #444;
+            border-radius: 4px;
+            bottom: 12px;
+            left: -50px;
+            min-width: 200px;
+            z-index: 99;
+        }
+        .ol-popup-closer {
+            text-decoration: none;
+            position: absolute;
+            top: 2px;
+            right: 8px;
+            color: #999;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .ol-popup-closer:hover {
+            color: #e0e0e0;
+        }
+        .ol-popup h3 {
+            color: #4db8ff;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        .ol-popup p {
+            font-size: 12px;
+            color: #999;
+            margin: 4px 0;
+        }
+        .map-toolbar {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            z-index: 100;
+            display: flex;
+            gap: 8px;
+        }
+        .toolbar-btn {
+            background: #2d2d2d;
+            color: #e0e0e0;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 8px 14px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .toolbar-btn:hover {
+            background: #3a3a3a;
+            border-color: #4db8ff;
+        }
+        .toolbar-btn.active {
+            background: #003580;
+            border-color: #4db8ff;
+            color: #4db8ff;
+        }
+        .polygon-list {
+            flex: 1;
+            min-height: 0;
+            padding: 8px;
+            border-top: 1px solid #444;
+            overflow-y: auto;
+        }
+        .polygon-list h3 {
+            font-size: 13px;
+            color: #999;
+            margin-bottom: 6px;
+            padding: 4px 0;
+        }
+        .polygon-item {
+            background: #3a3a3a;
+            border: 1px solid #444;
+            border-left: 4px solid #f0a500;
+            border-radius: 4px;
+            padding: 8px;
+            margin-bottom: 6px;
+            font-size: 11px;
+            color: #999;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .polygon-item[data-priority="High"]   { border-left-color: #ff4444; }
+        .polygon-item[data-priority="Medium"] { border-left-color: #f0a500; }
+        .polygon-item[data-priority="Low"]    { border-left-color: #44cc44; }
+        .polygon-item-name {
+            color: #f0a500;
+            font-weight: bold;
+        }
+        .priority-badge {
+            display: inline-block;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-top: 3px;
+        }
+        .priority-badge.High   { background: #5f1a1a; color: #ff4444; }
+        .priority-badge.Medium { background: #5f3a00; color: #f0a500; }
+        .priority-badge.Low    { background: #1a4a1a; color: #44cc44; }
+        .priority-select {
+            background: #2d2d2d;
+            color: #e0e0e0;
+            border: 1px solid #555;
+            border-radius: 3px;
+            font-size: 10px;
+            padding: 2px 4px;
+            margin-top: 3px;
+            cursor: pointer;
+        }
+        .polygon-delete-btn {
+            background: none;
+            border: none;
+            color: #ff6b6b;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 0 4px;
+        }
+        .polygon-delete-btn:hover { color: #ff4444; }
+        .send-task-btn {
+            background: #003580;
+            border: 1px solid #4db8ff;
+            color: #4db8ff;
+            border-radius: 3px;
+            font-size: 10px;
+            padding: 3px 8px;
+            margin-top: 4px;
+            cursor: pointer;
+            width: 100%;
+            transition: background 0.2s;
+        }
+        .send-task-btn:hover { background: #004db8; }
+        .send-task-btn:disabled { opacity: 0.5; cursor: default; }
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #2d2d2d;
+            border: 1px solid #4db8ff;
+            color: #4db8ff;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-size: 13px;
+            z-index: 9999;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        .toast.error { border-color: #ff6b6b; color: #ff6b6b; }
+        .toast.show { opacity: 1; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="map">
+            <div class="map-toolbar">
+                <button class="toolbar-btn" id="draw-btn" onclick="toggleDraw()">✏ Draw Zone</button>
+                <button class="toolbar-btn" id="clear-btn" onclick="clearPolygons()">🗑 Clear All</button>
+            </div>
+        </div>
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h2>Fleet Status</h2>
+                <div class="sidebar-stats">
+                    <div class="stat">
+                        <div class="stat-value" id="drone-count">0</div>
+                        <div class="stat-label">Drones</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="online-count">0</div>
+                        <div class="stat-label">Online</div>
+                    </div>
+                </div>
+            </div>
+            <div class="drone-list" id="drone-list"></div>
+            <div class="polygon-list" id="polygon-list">
+                <h3>NAIs (0)</h3>
+            </div>
+            <div class="connection-status disconnected" id="connection-status">Connecting...</div>
+        </div>
+    </div>
+
+    <div id="popup" class="ol-popup">
+        <a href="#" id="popup-closer" class="ol-popup-closer"></a>
+        <div id="popup-content"></div>
+    </div>
+    <div id="toast" class="toast"></div>
+
+    <script>
+        const droneMarkers = {};
+        const droneData = {};
+        let map;
+        let vectorSource;
+        let vectorLayer;
+        let drawSource;
+        let drawLayer;
+        let drawInteraction = null;
+        let isDrawing = false;
+        let polygonCount = 0;
+        let selectedFeature = null;
+
+        function initMap() {
+            vectorSource = new ol.source.Vector();
+            vectorLayer = new ol.layer.Vector({ source: vectorSource });
+
+            drawSource = new ol.source.Vector();
+            drawLayer = new ol.layer.Vector({ source: drawSource });
+
+            // update sidebar after feature is committed to source
+            drawSource.on('addfeature', updatePolygonList);
+            drawSource.on('removefeature', updatePolygonList);
+
+            map = new ol.Map({
+                target: 'map',
+                layers: [
+                    new ol.layer.Tile({
+                        source: new ol.source.XYZ({
+                            url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                            attributions: 'Esri World Imagery',
+                        }),
+                    }),
+                    drawLayer,
+                    vectorLayer,
+                ],
+                view: new ol.View({
+                    center: ol.proj.fromLonLat([-86.4869, 30.5138]),
+                    zoom: 13,
+                }),
+            });
+
+            map.on('click', onMapClick);
+
+            // fixed HOMEPLATE marker
+            const homeplateFeature = new ol.Feature({
+                geometry: new ol.geom.Point(ol.proj.fromLonLat([-86.4869, 30.5138])),
+                name: 'HOMEPLATE',
+            });
+            homeplateFeature.setStyle(new ol.style.Style({
+                image: new ol.style.Icon({
+                    anchor: [0.5, 0.5],
+                    src: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+                        '<svg xmlns="http://www.w3.org/2000/svg" width="30" height="28" viewBox="0 0 30 28">'
+                        + '<polygon points="2,2 28,2 28,16 15,26 2,16" fill="white" stroke="#333" stroke-width="2"/>'
+                        + '</svg>'
+                    ),
+                    scale: 1.0,
+                }),
+                text: new ol.style.Text({
+                    text: 'HOMEPLATE',
+                    offsetY: 20,
+                    fill: new ol.style.Fill({ color: '#ffffff' }),
+                    stroke: new ol.style.Stroke({ color: '#000', width: 2 }),
+                    font: 'bold 11px sans-serif',
+                }),
+            }));
+            vectorSource.addFeature(homeplateFeature);
+        }
+
+        function toggleDraw() {
+            const btn = document.getElementById('draw-btn');
+            if (isDrawing) {
+                stopDraw();
+            } else {
+                startDraw();
+            }
+        }
+
+        function startDraw() {
+            isDrawing = true;
+            document.getElementById('draw-btn').classList.add('active');
+            document.getElementById('draw-btn').textContent = '⏹ Finish';
+
+            drawInteraction = new ol.interaction.Draw({
+                source: drawSource,
+                type: 'Polygon',
+            });
+
+            drawInteraction.on('drawend', (evt) => {
+                polygonCount++;
+                const name = `NAI ${polygonCount}`;
+                evt.feature.set('name', name);
+                evt.feature.set('id', polygonCount);
+                evt.feature.set('priority', 'Medium');
+                applyZoneStyle(evt.feature);
+                stopDraw();
+                // updatePolygonList is triggered by drawSource addfeature event
+            });
+
+            map.addInteraction(drawInteraction);
+        }
+
+        function stopDraw() {
+            isDrawing = false;
+            document.getElementById('draw-btn').classList.remove('active');
+            document.getElementById('draw-btn').textContent = '✏ Draw Zone';
+            if (drawInteraction) {
+                map.removeInteraction(drawInteraction);
+                drawInteraction = null;
+            }
+        }
+
+        function clearPolygons() {
+            drawSource.clear();
+            polygonCount = 0;
+            updatePolygonList();
+        }
+
+        const PRIORITY_COLORS = {
+            High:   { stroke: '#ff4444', fill: 'rgba(255, 68,  68,  0.15)' },
+            Medium: { stroke: '#f0a500', fill: 'rgba(240, 165, 0,   0.15)' },
+            Low:    { stroke: '#44cc44', fill: 'rgba(68,  204, 68,  0.15)' },
+        };
+
+        function applyZoneStyle(feature) {
+            const p = feature.get('priority') || 'Medium';
+            const c = PRIORITY_COLORS[p];
+            feature.setStyle(new ol.style.Style({
+                stroke: new ol.style.Stroke({ color: c.stroke, width: 2 }),
+                fill:   new ol.style.Fill({ color: c.fill }),
+                text:   new ol.style.Text({
+                    text: feature.get('name'),
+                    fill: new ol.style.Fill({ color: c.stroke }),
+                    font: 'bold 11px sans-serif',
+                }),
+            }));
+        }
+
+        function setPriority(id, priority) {
+            const feature = drawSource.getFeatures().find(f => f.get('id') === id);
+            if (!feature) return;
+            feature.set('priority', priority);
+            applyZoneStyle(feature);
+            updatePolygonList();
+        }
+
+        function deletePolygon(id) {
+            const feature = drawSource.getFeatures().find(f => f.get('id') === id);
+            if (feature) drawSource.removeFeature(feature);
+            updatePolygonList();
+        }
+
+        function updatePolygonList() {
+            const container = document.getElementById('polygon-list');
+            const features = drawSource.getFeatures();
+            container.innerHTML = `<h3>NAIs (${features.length})</h3>`;
+            features.forEach(f => {
+                const name = f.get('name') || 'NAI';
+                const id = f.get('id');
+                const priority = f.get('priority') || 'Medium';
+                const coords = f.getGeometry().getCoordinates()[0]
+                    .map(c => ol.proj.toLonLat(c).map(v => v.toFixed(5)).join(', '))
+                    .slice(0, -1);
+                const item = document.createElement('div');
+                item.className = 'polygon-item';
+                item.dataset.priority = priority;
+                item.innerHTML = `
+                    <div style="flex:1">
+                        <div class="polygon-item-name">${name}</div>
+                        <select class="priority-select" onchange="setPriority(${id}, this.value)">
+                            <option${priority==='High'   ? ' selected' : ''}>High</option>
+                            <option${priority==='Medium' ? ' selected' : ''}>Medium</option>
+                            <option${priority==='Low'    ? ' selected' : ''}>Low</option>
+                        </select>
+                        <div style="font-size:10px; margin-top:3px; color:#666">${coords.length} vertices</div>
+                        <button class="send-task-btn" onclick="sendTask(${id})">&#9992; Send Tasking</button>
+                    </div>
+                    <button class="polygon-delete-btn" onclick="deletePolygon(${id})" title="Delete">✕</button>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function getHeadingRotation(heading) {
+            return (heading * Math.PI) / 180;
+        }
+
+        function updateDroneMarker(agentId, droneInfo) {
+            const { lat, lon, heading, velocity, online, age_s } = droneInfo;
+            const coordinate = ol.proj.fromLonLat([lon, lat]);
+
+            if (!droneMarkers[agentId]) {
+                const feature = new ol.Feature({
+                    geometry: new ol.geom.Point(coordinate),
+                    name: agentId,
+                    agentId: agentId,
+                });
+
+                const style = new ol.style.Style({
+                    image: new ol.style.Icon({
+                        anchor: [0.5, 0.5],
+                        src: 'data:image/svg+xml;utf8,' + encodeURIComponent(getDroneMarkerSVG(online)),
+                        scale: 1.2,
+                        rotation: getHeadingRotation(heading),
+                    }),
+                    text: new ol.style.Text({
+                        text: agentId,
+                        offsetY: 20,
+                        fill: new ol.style.Fill({ color: '#4db8ff' }),
+                        font: '11px sans-serif',
+                    }),
+                });
+
+                feature.setStyle(style);
+                vectorSource.addFeature(feature);
+                droneMarkers[agentId] = feature;
+            } else {
+                const feature = droneMarkers[agentId];
+                feature.getGeometry().setCoordinates(coordinate);
+
+                const style = new ol.style.Style({
+                    image: new ol.style.Icon({
+                        anchor: [0.5, 0.5],
+                        src: 'data:image/svg+xml;utf8,' + encodeURIComponent(getDroneMarkerSVG(online)),
+                        scale: 1.2,
+                        rotation: getHeadingRotation(heading),
+                    }),
+                    text: new ol.style.Text({
+                        text: agentId,
+                        offsetY: 20,
+                        fill: new ol.style.Fill({ color: '#4db8ff' }),
+                        font: '11px sans-serif',
+                    }),
+                });
+
+                feature.setStyle(style);
+            }
+
+            droneData[agentId] = { lat, lon, heading, velocity, online, age_s };
+        }
+
+        function getDroneMarkerSVG(online) {
+            const color = online ? '#003580' : '#ff6b6b';
+            return `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+                <polygon points="12,2 22,22 12,17 2,22" fill="${color}" stroke="#aac8ff" stroke-width="1"/>
+            </svg>`;
+        }
+
+        function updateDroneList(fleet) {
+            const droneList = document.getElementById('drone-list');
+            droneList.innerHTML = '';
+
+            const sortedIds = Object.keys(fleet).sort();
+            for (const agentId of sortedIds) {
+                const droneInfo = fleet[agentId];
+                const onlineClass = droneInfo.online ? 'online' : 'offline';
+                const statusText = droneInfo.online ? 'ONLINE' : 'OFFLINE';
+
+                const droneElement = document.createElement('div');
+                droneElement.className = `drone-item ${onlineClass}`;
+                droneElement.innerHTML = `
+                    <div class="drone-name">${agentId}</div>
+                    <div class="drone-status">
+                        <span class="drone-status-badge ${onlineClass}">${statusText}</span>
+                        <span style="color: #666; font-size: 10px;">age ${droneInfo.age_s.toFixed(1)}s</span>
+                    </div>
+                    <div class="drone-coords">
+                        <div>📍 ${droneInfo.lat.toFixed(6)}, ${droneInfo.lon.toFixed(6)}</div>
+                    </div>
+                    <div class="drone-heading">
+                        <span>🧭 ${droneInfo.heading.toFixed(1)}° | 🏃 ${droneInfo.velocity.toFixed(1)} mph</span>
+                    </div>
+                    <div class="drone-heading">
+                        <span>⛽ RANGE ${(droneInfo.fuel_range||0).toFixed(2)} mi | 🏠 BINGO ${(droneInfo.bingo||0).toFixed(2)} mi</span>
+                    </div>
+                `;
+                droneList.appendChild(droneElement);
+            }
+        }
+
+        function updateStats(fleet) {
+            const droneCount = Object.keys(fleet).length;
+            const onlineCount = Object.values(fleet).filter((d) => d.online).length;
+
+            document.getElementById('drone-count').textContent = droneCount;
+            document.getElementById('online-count').textContent = onlineCount;
+        }
+
+        function onMapClick(evt) {
+            const feature = map.forEachFeatureAtPixel(evt.pixel, (f) => f);
+            if (feature) {
+                const agentId = feature.get('agentId');
+                const droneInfo = droneData[agentId];
+                if (droneInfo) {
+                    showPopup(feature.getGeometry().getCoordinates(), droneInfo);
+                }
+            } else {
+                document.getElementById('popup').style.display = 'none';
+            }
+        }
+
+        function showPopup(coordinate, droneInfo) {
+            const popup = document.getElementById('popup');
+            const content = document.getElementById('popup-content');
+            content.innerHTML = `
+                <h3>${droneInfo.agentId || 'Drone'}</h3>
+                <p><strong>Status:</strong> ${droneInfo.online ? 'ONLINE' : 'OFFLINE'}</p>
+                <p><strong>Position:</strong> ${droneInfo.lat.toFixed(6)}, ${droneInfo.lon.toFixed(6)}</p>
+                <p><strong>Heading:</strong> ${droneInfo.heading.toFixed(1)}°</p>
+                <p><strong>Velocity:</strong> ${droneInfo.velocity.toFixed(1)} mph</p>
+                <p><strong>RANGE:</strong> ${(droneInfo.fuel_range||0).toFixed(2)} mi</p>
+                <p><strong>BINGO:</strong> ${(droneInfo.bingo||0).toFixed(2)} mi to HOMEPLATE</p>
+                <p><strong>Last Seen:</strong> ${droneInfo.age_s.toFixed(1)}s ago</p>
+            `;
+            popup.style.display = 'block';
+            popup.style.left = map.getPixelFromCoordinate(coordinate)[0] + 'px';
+            popup.style.bottom = window.innerHeight - map.getPixelFromCoordinate(coordinate)[1] + 'px';
+        }
+
+        document.getElementById('popup-closer').addEventListener('click', (e) => {
+            e.preventDefault();
+            document.getElementById('popup').style.display = 'none';
+        });
+
+        function showToast(msg, isError = false) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = 'toast' + (isError ? ' error' : '') + ' show';
+            setTimeout(() => { t.className = 'toast' + (isError ? ' error' : ''); }, 3000);
+        }
+
+        async function sendTask(id) {
+            const feature = drawSource.getFeatures().find(f => f.get('id') === id);
+            if (!feature) return;
+            const coords = feature.getGeometry().getCoordinates()[0]
+                .slice(0, -1)  // drop closing duplicate
+                .map(c => ol.proj.toLonLat(c));
+            const body = {
+                nai_name: feature.get('name'),
+                priority: feature.get('priority') || 'Medium',
+                coordinates: coords,
+            };
+            try {
+                const resp = await fetch('/task', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    showToast(`Tasking sent: ${data.task_id} — ${body.nai_name}`);
+                } else {
+                    showToast(`Error: ${data.error}`, true);
+                }
+            } catch (e) {
+                showToast('Failed to send tasking', true);
+            }
+        }
+
+        async function fetchFleet() {
+            try {
+                const resp = await fetch('/fleet');
+                if (!resp.ok) throw new Error(resp.status);
+                const data = await resp.json();
+                const fleet = data.fleet;
+                for (const agentId in fleet) {
+                    updateDroneMarker(agentId, fleet[agentId]);
+                }
+                updateDroneList(fleet);
+                updateStats(fleet);
+                document.getElementById('connection-status').textContent = 'Connected';
+                document.getElementById('connection-status').className = 'connection-status connected';
+            } catch (e) {
+                document.getElementById('connection-status').textContent = 'Disconnected';
+                document.getElementById('connection-status').className = 'connection-status disconnected';
+            }
+        }
+
+        initMap();
+        fetchFleet();
+        setInterval(fetchFleet, 1000);
+    </script>
+</body>
+</html>
