@@ -18,6 +18,7 @@ class CommNode(Node):
         self._velocity: float = 0.0
         self._fuel_range: float = 0.0
         self._bingo: float = 0.0
+        self._state: str = 'AWAITING_TASKING'
         self._gps_ready: bool = False
         self._tasks: dict[str, dict] = {}  # keyed by nai_name, latest task wins
 
@@ -31,6 +32,7 @@ class CommNode(Node):
         self.create_subscription(Float32,   f'{ns}/drone/velocity',   self._on_velocity, 10)
         self.create_subscription(Float32,   f'{ns}/drone/fuel_range', self._on_fuel,     10)
         self.create_subscription(Float32,   f'{ns}/drone/bingo',      self._on_bingo,    10)
+        self.create_subscription(String,    f'{ns}/state',            self._on_state,     10)
         self.create_subscription(String,    'swarm/tasking',          self._on_tasking,  10)
 
         self.get_logger().info(f'CommNode started — agent_id={self._agent_id}, publishing to {status_topic}')
@@ -56,6 +58,10 @@ class CommNode(Node):
     def _on_bingo(self, msg: Float32) -> None:
         self._bingo = float(msg.data)
 
+    def _on_state(self, msg: String) -> None:
+        self._state = msg.data
+        self._publish()
+
     def _publish(self) -> None:
         if not self._gps_ready:
             self.get_logger().debug('Waiting for GPS…')
@@ -68,6 +74,7 @@ class CommNode(Node):
             'velocity': self._velocity,
             'fuel_range': self._fuel_range,
             'bingo': self._bingo,
+            'state': self._state,
             'stamp': self.get_clock().now().nanoseconds * 1e-9,
         }
         out = String()

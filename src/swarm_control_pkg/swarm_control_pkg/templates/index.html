@@ -116,6 +116,39 @@
             background: #5f2a2a;
             color: #ff6b6b;
         }
+        .state-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+        .state-badge.awaiting {
+            background: #294d3b;
+            color: #7ae582;
+        }
+        .state-badge.enroute {
+            background: #5f4b1d;
+            color: #ffd166;
+        }
+        .state-badge.searching {
+            background: #4d3c5f;
+            color: #c084fc;
+        }
+        .state-badge.rtb {
+            background: #5a2b2b;
+            color: #ff8c8c;
+        }
+        .state-badge.refueling {
+            background: #24456b;
+            color: #7cc7ff;
+        }
+        .state-badge.unknown {
+            background: #3a3a3a;
+            color: #d5d5d5;
+        }
         .drone-coords {
             font-size: 11px;
             color: #666;
@@ -522,8 +555,18 @@
             return (heading * Math.PI) / 180;
         }
 
+        function getStateBadgeClass(state) {
+            const normalized = String(state || 'UNKNOWN').toUpperCase();
+            if (normalized === 'AWAITING_TASKING') return 'awaiting';
+            if (normalized === 'ENROUTE_TO_TASKING') return 'enroute';
+            if (normalized === 'SEARCHING') return 'searching';
+            if (normalized === 'RTB') return 'rtb';
+            if (normalized === 'REFUELING') return 'refueling';
+            return 'unknown';
+        }
+
         function updateDroneMarker(agentId, droneInfo) {
-            const { lat, lon, heading, velocity, online, age_s } = droneInfo;
+            const { lat, lon, heading, velocity, online, age_s, state } = droneInfo;
             const coordinate = ol.proj.fromLonLat([lon, lat]);
 
             if (!droneMarkers[agentId]) {
@@ -573,7 +616,7 @@
                 feature.setStyle(style);
             }
 
-            droneData[agentId] = { lat, lon, heading, velocity, online, age_s };
+            droneData[agentId] = { lat, lon, heading, velocity, online, age_s, state };
         }
 
         function getDroneMarkerSVG(online) {
@@ -595,6 +638,8 @@
 
                 const droneElement = document.createElement('div');
                 droneElement.className = `drone-item ${onlineClass}`;
+                const stateText = droneInfo.state || 'UNKNOWN';
+                const stateClass = getStateBadgeClass(stateText);
                 droneElement.innerHTML = `
                     <div class="drone-name">${agentId}</div>
                     <div class="drone-status">
@@ -606,6 +651,10 @@
                     </div>
                     <div class="drone-heading">
                         <span>🧭 ${droneInfo.heading.toFixed(1)}° | 🏃 ${droneInfo.velocity.toFixed(1)} mph</span>
+                    </div>
+                    <div class="drone-heading">
+                        <span>State:</span>
+                        <span class="state-badge ${stateClass}">${stateText}</span>
                     </div>
                     <div class="drone-heading">
                         <span>⛽ RANGE ${(droneInfo.fuel_range||0).toFixed(2)} mi | 🏠 BINGO ${(droneInfo.bingo||0).toFixed(2)} mi</span>
@@ -639,9 +688,12 @@
         function showPopup(coordinate, droneInfo) {
             const popup = document.getElementById('popup');
             const content = document.getElementById('popup-content');
+            const stateText = droneInfo.state || 'UNKNOWN';
+            const stateClass = getStateBadgeClass(stateText);
             content.innerHTML = `
                 <h3>${droneInfo.agentId || 'Drone'}</h3>
                 <p><strong>Status:</strong> ${droneInfo.online ? 'ONLINE' : 'OFFLINE'}</p>
+                <p><strong>State:</strong> <span class="state-badge ${stateClass}">${stateText}</span></p>
                 <p><strong>Position:</strong> ${droneInfo.lat.toFixed(6)}, ${droneInfo.lon.toFixed(6)}</p>
                 <p><strong>Heading:</strong> ${droneInfo.heading.toFixed(1)}°</p>
                 <p><strong>Velocity:</strong> ${droneInfo.velocity.toFixed(1)} mph</p>

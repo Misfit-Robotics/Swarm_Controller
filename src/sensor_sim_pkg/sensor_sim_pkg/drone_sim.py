@@ -1,5 +1,6 @@
 import json
 import math
+import time
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import NavSatFix
@@ -14,7 +15,8 @@ _METERS_PER_DEG_LAT = 111_111.0
 _MAX_TURN_RATE = 3.0  # degrees per second
 _EARTH_RADIUS_MILES = 3958.8
 _METERS_TO_MILES = 1.0 / 1609.344
-_START_FUEL_MILES = 50.0
+_START_FUEL_MILES = 1.0
+_REFUEL_DURATION_SECONDS = 20.0
 
 
 def _haversine_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -45,6 +47,8 @@ class DroneSimNode(Node):
         self._fuel_range: float = _START_FUEL_MILES
         self._homeplate_lat: float = _START_LAT
         self._homeplate_lon: float = _START_LON
+        self._state: str = 'AWAITING_TASKING'
+        self._refuel_started: float | None = None
 
         ns = self._agent_id
         self._gps_pub   = self.create_publisher(NavSatFix, f'{ns}/drone/gps', 10)
@@ -54,7 +58,9 @@ class DroneSimNode(Node):
         self._bingo_pub = self.create_publisher(Float32,   f'{ns}/drone/bingo', 10)
 
         self.create_subscription(Float32, f'{ns}/desired_heading', self._on_desired_heading, 10)
+        self.create_subscription(Float32, f'{ns}/desired_velocity', self._on_desired_velocity, 10)
         self.create_subscription(String,  'swarm/homeplate',        self._on_homeplate, 10)
+        self.create_subscription(String,  f'{ns}/state',            self._on_state, 10)
 
         self.create_timer(1.0, self._update) # Runs update every second
         self.get_logger().info(f'DroneSimNode started — agent_id={self._agent_id} sim_speed={self._sim_speed}x')
@@ -63,6 +69,9 @@ class DroneSimNode(Node):
     def _on_desired_heading(self, msg: Float32) -> None:
         self._desired_heading = float(msg.data)
 
+    def _on_desired_velocity(self, msg: Float32) -> None:
+        self.velocity = max(0.0, min(20.0, float(msg.data)))
+
     def _on_homeplate(self, msg: String) -> None:
         try:
             data = json.loads(msg.data)
@@ -70,6 +79,13 @@ class DroneSimNode(Node):
             self._homeplate_lon = float(data['lon'])
         except (json.JSONDecodeError, KeyError):
             pass
+
+    def _on_state(self, msg: String) -> None:
+        new_state = msg.data
+        if self._state == 'REFUELING' and new_state == 'AWAITING_TASKING':
+            self._fuel_range = _START_FUEL_MILES
+            self.get_logger().info(f'[{self._agent_id}] Refueling complete — fuel restored to default range ({self._fuel_range:.2f} mi)')
+        self._state = new_state
 
     def _apply_turn_rate(self) -> None:
         if self._desired_heading is None:
@@ -80,6 +96,20 @@ class DroneSimNode(Node):
         self.heading = (self.heading + step) % 360
 
     def _update(self):
+        if self._state == 'REFUELING':
+            if self._refuel_started is None:
+                self._refuel_started = time.monotonic()
+            if time.monotonic() - self._refuel_started >= _REFUEL_DURATION_SECONDS:
+                self._fuel_range = _START_FUEL_MILES
+                self._refuel_started = None
+                self.get_logger().info(f'[{self._agent_id}] Refueling complete — fuel restored to default range ({self._fuel_range:.2f} mi)')
+            else:
+                self.get_logger().info(f'[{self._agent_id}] Refueling in progress — fuel={self._fuel_range:.2f} mi')
+            fuel = Float32()
+            fuel.data = float(self._fuel_range)
+            self._fuel_pub.publish(fuel)
+            return
+
         self._apply_turn_rate()
 
         # advance position scaled by sim_speed per tick
