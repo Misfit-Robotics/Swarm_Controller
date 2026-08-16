@@ -45,6 +45,7 @@ def fleet_status():
             'velocity': entry['data'].get('velocity', 0),
             'fuel_range': entry['data'].get('fuel_range', 0),
             'bingo': entry['data'].get('bingo', 0),
+            'state': entry['data'].get('state', 'UNKNOWN'),
         }
 
     return jsonify({

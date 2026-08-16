@@ -46,7 +46,7 @@ class SwarmControllerCore(Node):
         try:
             data: dict = json.loads(msg.data)
         except json.JSONDecodeError as e:
-            self.get_logger().warn(f'Bad JSON on {topic}: {e}')
+            self.get_logger().warning(f'Bad JSON on {topic}: {e}')
             return
         agent_id: str = data.get('agent_id', topic[len(_STATUS_PREFIX):])
         now = time.monotonic()
@@ -61,7 +61,7 @@ class SwarmControllerCore(Node):
             age = now - entry['last_seen']
             if entry['online'] and age > _HEARTBEAT_TIMEOUT:
                 entry['online'] = False
-                self.get_logger().warn(f'[{agent_id}] OFFLINE')
+                self.get_logger().warning(f'[{agent_id}] OFFLINE')
 
     def get_fleet_snapshot(self) -> dict[str, dict[str, Any]]:
         """Return a snapshot of the current fleet state."""
