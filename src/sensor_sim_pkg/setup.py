@@ -25,7 +25,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'drone_sim = sensor_sim_pkg.drone_sim:main',
+            'sensor_node = sensor_sim_pkg.sensor_node:main',
         ],
     },
 )

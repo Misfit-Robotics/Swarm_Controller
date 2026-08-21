@@ -278,7 +278,8 @@
         .priority-badge.High   { background: #5f1a1a; color: #ff4444; }
         .priority-badge.Medium { background: #5f3a00; color: #f0a500; }
         .priority-badge.Low    { background: #1a4a1a; color: #44cc44; }
-        .priority-select {
+        .priority-select,
+.purpose-select {
             background: #2d2d2d;
             color: #e0e0e0;
             border: 1px solid #555;
@@ -287,6 +288,7 @@
             padding: 2px 4px;
             margin-top: 3px;
             cursor: pointer;
+            width: 100%;
         }
         .polygon-delete-btn {
             background: none;
@@ -297,20 +299,55 @@
             padding: 0 4px;
         }
         .polygon-delete-btn:hover { color: #ff4444; }
-        .send-task-btn {
-            background: #003580;
-            border: 1px solid #4db8ff;
-            color: #4db8ff;
-            border-radius: 3px;
-            font-size: 10px;
-            padding: 3px 8px;
-            margin-top: 4px;
-            cursor: pointer;
+        .mission-top-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 8px;
             width: 100%;
-            transition: background 0.2s;
         }
-        .send-task-btn:hover { background: #004db8; }
-        .send-task-btn:disabled { opacity: 0.5; cursor: default; }
+        .mission-card-body {
+            flex: 1;
+            min-width: 0;
+        }
+        .mission-action-icons {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            margin-left: auto;
+            padding-top: 2px;
+        }
+        .mission-action-btn {
+            width: 26px;
+            height: 26px;
+            border-radius: 4px;
+            border: 1px solid transparent;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            padding: 0;
+        }
+        .send-task-btn {
+            background: rgba(77, 184, 255, 0.12);
+            border-color: #4db8ff;
+            color: #4db8ff;
+        }
+        .send-task-btn:hover { background: rgba(77, 184, 255, 0.2); }
+        .pause-mission-btn {
+            background: rgba(240, 195, 109, 0.12);
+            border-color: #f0c36d;
+            color: #f0c36d;
+        }
+        .pause-mission-btn:hover { background: rgba(240, 195, 109, 0.2); }
+        .delete-mission-btn {
+            background: rgba(255, 107, 107, 0.12);
+            border-color: #ff6b6b;
+            color: #ff6b6b;
+        }
+        .delete-mission-btn:hover { background: rgba(255, 107, 107, 0.2); }
         .toast {
             position: fixed;
             bottom: 24px;
@@ -355,7 +392,7 @@
             </div>
             <div class="drone-list" id="drone-list"></div>
             <div class="polygon-list" id="polygon-list">
-                <h3>NAIs (0)</h3>
+                <h3>Missions (0)</h3>
             </div>
             <div class="connection-status disconnected" id="connection-status">Connecting...</div>
         </div>
@@ -458,10 +495,14 @@
 
             drawInteraction.on('drawend', (evt) => {
                 polygonCount++;
-                const name = `NAI ${polygonCount}`;
+                const name = `Mission ${polygonCount}`;
                 evt.feature.set('name', name);
+                evt.feature.set('mission_name', name);
+                evt.feature.set('nai_name', name);
                 evt.feature.set('id', polygonCount);
                 evt.feature.set('priority', 'Medium');
+                evt.feature.set('purpose', 'Find Targets');
+                evt.feature.set('status', 'paused');
                 applyZoneStyle(evt.feature);
                 stopDraw();
                 // updatePolygonList is triggered by drawSource addfeature event
@@ -485,6 +526,12 @@
             polygonCount = 0;
             updatePolygonList();
         }
+
+        const PURPOSE_OPTIONS = [
+            'Find Targets',
+            'Track Targets',
+            'Intercept Targets',
+        ];
 
         const PRIORITY_COLORS = {
             High:   { stroke: '#ff4444', fill: 'rgba(255, 68,  68,  0.15)' },
@@ -514,6 +561,20 @@
             updatePolygonList();
         }
 
+        function setPurpose(id, purpose) {
+            const feature = drawSource.getFeatures().find(f => f.get('id') === id);
+            if (!feature) return;
+            feature.set('purpose', purpose);
+            updatePolygonList();
+        }
+
+        function setMissionStatus(id, status) {
+            const feature = drawSource.getFeatures().find(f => f.get('id') === id);
+            if (!feature) return;
+            feature.set('status', status);
+            updatePolygonList();
+        }
+
         function deletePolygon(id) {
             const feature = drawSource.getFeatures().find(f => f.get('id') === id);
             if (feature) drawSource.removeFeature(feature);
@@ -523,11 +584,13 @@
         function updatePolygonList() {
             const container = document.getElementById('polygon-list');
             const features = drawSource.getFeatures();
-            container.innerHTML = `<h3>NAIs (${features.length})</h3>`;
+            container.innerHTML = `<h3>Missions (${features.length})</h3>`;
             features.forEach(f => {
-                const name = f.get('name') || 'NAI';
                 const id = f.get('id');
+                const name = f.get('mission_name') || f.get('name') || `Mission ${id}`;
                 const priority = f.get('priority') || 'Medium';
+                const purpose = f.get('purpose') || 'Find Targets';
+                const status = f.get('status') || 'paused';
                 const coords = f.getGeometry().getCoordinates()[0]
                     .map(c => ol.proj.toLonLat(c).map(v => v.toFixed(5)).join(', '))
                     .slice(0, -1);
@@ -535,17 +598,28 @@
                 item.className = 'polygon-item';
                 item.dataset.priority = priority;
                 item.innerHTML = `
-                    <div style="flex:1">
-                        <div class="polygon-item-name">${name}</div>
+                    <div class="mission-card-body">
+                        <div class="mission-top-row">
+                            <div class="polygon-item-name">${name}</div>
+                            <div class="mission-action-icons">
+                                <button class="mission-action-btn send-task-btn" onclick="initiateMission(${id})" title="Initiate">▶</button>
+                                <button class="mission-action-btn pause-mission-btn" onclick="pauseMission(${id})" title="Pause">⏸</button>
+                                <button class="mission-action-btn delete-mission-btn" onclick="deletePolygon(${id})" title="Delete Mission">🗑</button>
+                            </div>
+                        </div>
+                        <label style="display:block; font-size:10px; color:#666; margin-top:6px;">Priority</label>
                         <select class="priority-select" onchange="setPriority(${id}, this.value)">
                             <option${priority==='High'   ? ' selected' : ''}>High</option>
                             <option${priority==='Medium' ? ' selected' : ''}>Medium</option>
                             <option${priority==='Low'    ? ' selected' : ''}>Low</option>
                         </select>
+                        <label style="display:block; font-size:10px; color:#666; margin-top:6px;">Purpose</label>
+                        <select class="purpose-select" onchange="setPurpose(${id}, this.value)">
+                            ${PURPOSE_OPTIONS.map(opt => `<option value="${opt}" ${purpose===opt ? 'selected' : ''}>${opt}</option>`).join('')}
+                        </select>
+                        <div style="font-size:10px; margin-top:6px; color:#666">Status: ${status}</div>
                         <div style="font-size:10px; margin-top:3px; color:#666">${coords.length} vertices</div>
-                        <button class="send-task-btn" onclick="sendTask(${id})">&#9992; Send Tasking</button>
                     </div>
-                    <button class="polygon-delete-btn" onclick="deletePolygon(${id})" title="Delete">✕</button>
                 `;
                 container.appendChild(item);
             });
@@ -718,31 +792,45 @@
             setTimeout(() => { t.className = 'toast' + (isError ? ' error' : ''); }, 3000);
         }
 
-        async function sendTask(id) {
+        function initiateMission(id) {
+            setMissionStatus(id, 'initiated');
+            return sendMission(id, 'initiated');
+        }
+
+        function pauseMission(id) {
+            setMissionStatus(id, 'paused');
+            return sendMission(id, 'paused');
+        }
+
+        async function sendMission(id, status = 'initiated') {
             const feature = drawSource.getFeatures().find(f => f.get('id') === id);
             if (!feature) return;
             const coords = feature.getGeometry().getCoordinates()[0]
-                .slice(0, -1)  // drop closing duplicate
+                .slice(0, -1)
                 .map(c => ol.proj.toLonLat(c));
+            const missionName = feature.get('mission_name') || feature.get('name') || `Mission ${id}`;
             const body = {
-                nai_name: feature.get('name'),
+                nai_name: missionName,
+                mission_name: missionName,
                 priority: feature.get('priority') || 'Medium',
+                purpose: feature.get('purpose') || 'Find Targets',
+                status: status,
                 coordinates: coords,
             };
             try {
-                const resp = await fetch('/task', {
+                const resp = await fetch('/mission', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body),
                 });
                 const data = await resp.json();
                 if (resp.ok) {
-                    showToast(`Tasking sent: ${data.task_id} — ${body.nai_name}`);
+                    showToast(`Mission ${status}: ${data.mission_id} — ${missionName}`);
                 } else {
                     showToast(`Error: ${data.error}`, true);
                 }
             } catch (e) {
-                showToast('Failed to send tasking', true);
+                showToast('Failed to send mission', true);
             }
         }
 
