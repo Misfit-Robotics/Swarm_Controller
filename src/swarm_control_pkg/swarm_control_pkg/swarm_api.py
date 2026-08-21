@@ -75,8 +75,8 @@ def drone_status(agent_id: str):
     })
 
 
-@app.route('/task', methods=['POST'])
-def send_task():
+@app.route('/mission', methods=['POST'])
+def send_mission():
     if _core is None:
         return jsonify({'error': 'core not initialized'}), 500
 
@@ -84,15 +84,22 @@ def send_task():
     if not body:
         return jsonify({'error': 'invalid JSON body'}), 400
 
-    nai_name = body.get('nai_name', 'Unknown NAI')
+    nai_name = body.get('nai_name', body.get('mission_name', 'Unknown Mission'))
     priority = body.get('priority', 'Medium')
+    purpose = body.get('purpose', 'Find Targets')
+    status = body.get('status', 'initiated')
     coordinates = body.get('coordinates', [])
 
     if not coordinates:
         return jsonify({'error': 'coordinates are required'}), 400
 
-    task_id = _core.publish_task(nai_name, priority, coordinates)
-    return jsonify({'status': 'sent', 'task_id': task_id}), 200
+    mission_id = _core.publish_mission(nai_name, priority, purpose, coordinates, status)
+    return jsonify({'status': 'sent', 'mission_id': mission_id, 'task_id': mission_id}), 200
+
+
+@app.route('/task', methods=['POST'])
+def send_task():
+    return send_mission()
 
 
 def main(args=None):

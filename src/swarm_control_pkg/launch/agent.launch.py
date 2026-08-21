@@ -19,8 +19,8 @@ def generate_launch_description():
 
         Node(
             package='sensor_sim_pkg',
-            executable='drone_sim',
-            name=['drone_sim_', agent_id],
+            executable='sensor_node',
+            name=['sensor_node_', agent_id],
             parameters=[{'agent_id': agent_id, 'sim_speed': sim_speed}],
             output='screen',
         ),

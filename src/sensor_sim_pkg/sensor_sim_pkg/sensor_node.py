@@ -5,17 +5,17 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import NavSatFix
 from std_msgs.msg import Float32, String
+from decision_pkg.json_logger import JsonLogger
 
 # Niceville, FL
 _START_LAT = 30.5138
 _START_LON = -86.4869
-
 _MPH_TO_MPS = 0.44704
 _METERS_PER_DEG_LAT = 111_111.0
 _MAX_TURN_RATE = 3.0  # degrees per second
 _EARTH_RADIUS_MILES = 3958.8
 _METERS_TO_MILES = 1.0 / 1609.344
-_START_FUEL_MILES = 1.0
+_START_FUEL_MILES = 25.0
 _REFUEL_DURATION_SECONDS = 20.0
 
 
@@ -30,7 +30,7 @@ def _haversine_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> floa
 
 class DroneSimNode(Node):
     def __init__(self):
-        super().__init__('drone_sim')
+        super().__init__('sensor_node')
 
         # Declares a value agent_id with a default value of 'drone_001'
         self.declare_parameter('agent_id', 'drone_001') 
@@ -63,7 +63,9 @@ class DroneSimNode(Node):
         self.create_subscription(String,  f'{ns}/state',            self._on_state, 10)
 
         self.create_timer(1.0, self._update) # Runs update every second
-        self.get_logger().info(f'DroneSimNode started — agent_id={self._agent_id} sim_speed={self._sim_speed}x')
+        self.logger = JsonLogger(name=f"{self._agent_id}", node='sensor_node')
+        self.logger.log("Successfully Started")
+        self.get_logger().info(f'SensorNode started — agent_id={self._agent_id} sim_speed={self._sim_speed}x')
 
 #----------------------------------------------------------------------------------------------------------
     def _on_desired_heading(self, msg: Float32) -> None:

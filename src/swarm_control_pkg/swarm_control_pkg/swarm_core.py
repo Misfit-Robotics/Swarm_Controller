@@ -20,13 +20,16 @@ class SwarmControllerCore(Node):
         super().__init__('swarm_controller')
         self._fleet: dict[str, dict[str, Any]] = {}
         self._subs: dict[str, Any] = {}
-        self._task_counter: int = 0
-        self._task_pub = self.create_publisher(String, 'swarm/tasking', 10)
+        self._mission_counter: int = 0
+        self._active_mission: dict[str, Any] | None = None
+        self._mission_pub = self.create_publisher(String, 'swarm/missions', 10)
         self._homeplate_pub = self.create_publisher(String, 'swarm/homeplate', 10)
         self.create_timer(_DISCOVERY_PERIOD, self._discover_drones)
         self.create_timer(_HEARTBEAT_PERIOD, self._check_heartbeats)
         # publish homeplate repeatedly so late-joining nodes receive it
         self.create_timer(5.0, self._publish_homeplate)
+        # re-broadcast the active mission regularly so late-joining agents receive it
+        self.create_timer(3.0, self._broadcast_active_mission)
         self._publish_homeplate()
 
     def _discover_drones(self) -> None:
@@ -72,22 +75,38 @@ class SwarmControllerCore(Node):
         msg.data = json.dumps({'lat': HOMEPLATE_LAT, 'lon': HOMEPLATE_LON})
         self._homeplate_pub.publish(msg)
 
-    def publish_task(self, nai_name: str, priority: str, coordinates: list) -> str:
-        """Publish an NAI tasking to all agents; returns the task_id."""
-        self._task_counter += 1
-        task_id = f'task_{self._task_counter:04d}'
+    def _broadcast_active_mission(self) -> None:
+        if self._active_mission is None:
+            return
+        msg = String()
+        msg.data = json.dumps(self._active_mission)
+        self._mission_pub.publish(msg)
+
+    def publish_mission(self, nai_name: str, priority: str, purpose: str, coordinates: list, status: str = 'initiated') -> str:
+        """Publish a mission to all agents; returns the mission_id."""
+        self._mission_counter += 1
+        mission_id = f'mission_{self._mission_counter:04d}'
         payload = {
-            'task_id': task_id,
+            'mission_id': mission_id,
+            'task_id': mission_id,
             'nai_name': nai_name,
+            'mission_name': nai_name,
             'priority': priority,
+            'purpose': purpose,
+            'status': status,
             'coordinates': coordinates,  # [[lon, lat], ...]
             'timestamp': time.time(),
         }
+        self._active_mission = payload
         msg = String()
         msg.data = json.dumps(payload)
-        self._task_pub.publish(msg)
+        self._mission_pub.publish(msg)
         self.get_logger().info(
-            f'Task published: {task_id} — {nai_name} ({priority}), '
+            f'Mission published: {mission_id} — {nai_name} ({priority}, {purpose}, {status}), '
             f'{len(coordinates)} vertices'
         )
-        return task_id
+        return mission_id
+
+    def publish_task(self, nai_name: str, priority: str, coordinates: list) -> str:
+        """Backward-compatible wrapper for legacy tasking callers."""
+        return self.publish_mission(nai_name, priority, 'Find Targets', coordinates, 'initiated')
